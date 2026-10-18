@@ -1,9 +1,10 @@
 // server.js
-// TNEH CUSTOM SMS BD — Owner: TNEH OWNER
+// TNEH CUSTOM SMS BD — Business: TNEH ETHICAL HACKING GROUP — Owner: TNEH OWNER
 
 const express = require('express');
 
 const API_NAME = 'TNEH CUSTOM SMS BD';
+const BUSINESS_NAME = 'TNEH ETHICAL HACKING GROUP';
 const OWNER = 'TNEH OWNER';
 
 const app = express();
@@ -24,12 +25,12 @@ app.get('/', (req, res) => {
   res.json({
     status: true,
     api_name: API_NAME,
+    business_name: BUSINESS_NAME,
     owner: OWNER,
     message: 'Server is running successfully',
     endpoints: {
       info: '/api?info=1',
-      // NEW ENDPOINT FORMAT
-      register: '/api?num=<phone>&name=<name>&business=<business_name>',
+      register: '/api?num=<phone>&msg=<name+business>',
     },
   });
 });
@@ -40,12 +41,6 @@ app.all('/api', async (req, res) => {
   const body = req.body || {};
 
   const num = (q.num ?? body.num ?? '').toString().trim();
-  
-  // Support direct 'name' and 'business' variables
-  let namePart = (q.name ?? body.name ?? '').toString().trim();
-  let businessNamePart = (q.business ?? body.business ?? '').toString().trim();
-  
-  // Fallback to the old 'msg' splitting method if name/business are not provided
   let msg = (q.msg ?? body.msg ?? '').toString().trim();
 
   // Info endpoint
@@ -53,48 +48,46 @@ app.all('/api', async (req, res) => {
     return res.status(200).json({
       status: true,
       api_name: API_NAME,
+      business_name: BUSINESS_NAME,
       owner: OWNER,
-      version: '1.1.0',
+      version: '1.0.0',
       endpoints: {
-        register_new: '/api?num=<phone>&name=<name>&business=<business_name>',
-        register_old: '/api?num=<phone>&msg=<name+business>',
+        register: '/api?num=<phone>&msg=<name+business>',
       },
     });
   }
 
-  if (!num) {
+  if (!num || !msg) {
     return res.status(200).json({
       status: false,
       api_name: API_NAME,
+      business_name: BUSINESS_NAME,
       owner: OWNER,
-      error: 'Missing parameter: num is required',
+      error: 'Missing parameters. Required: num, msg',
     });
   }
 
-  // If name or business is missing, use the old splitting logic from 'msg'
-  if ((!namePart || !businessNamePart) && msg) {
-    if (msg.length < 6) msg = msg.padEnd(6, ' ');
-    const chars = Array.from(msg);
-    const half = Math.ceil(chars.length / 2);
-    namePart = namePart || chars.slice(0, half).join('').trim();
-    businessNamePart = businessNamePart || chars.slice(half).join('').trim();
+  // --- FIX: Ensure msg is long enough so both halves are at least 3 chars ---
+  if (msg.length < 6) {
+    msg = msg.padEnd(6, ' ');
   }
 
-  // Validate required fields
-  if (!namePart || !businessNamePart) {
-    return res.status(200).json({
-      status: false,
-      api_name: API_NAME,
-      owner: OWNER,
-      error: 'Missing parameters. Provide either (num + msg) OR (num + name + business)',
-    });
-  }
+  // Split msg into two halves (UTF-8 aware)
+  const chars = Array.from(msg);
+  let half = Math.ceil(chars.length / 2);
+  
+  let namePart = chars.slice(0, half).join('').trim();
+  let businessNamePart = chars.slice(half).join('').trim();
 
-  // Force both parts to be between 3 and 50 characters
+  // --- FIX: Force both parts to be between 3 and 50 characters ---
   const padAndSlice = (str) => {
     let s = str.trim();
-    if (s.length < 3) s = s.padEnd(3, 'x');
-    if (s.length > 50) s = s.substring(0, 50).trim();
+    if (s.length < 3) {
+      s = s.padEnd(3, 'x');
+    }
+    if (s.length > 50) {
+      s = s.substring(0, 50).trim();
+    }
     return s;
   };
 
@@ -149,6 +142,7 @@ app.all('/api', async (req, res) => {
     if (parsed !== null) {
       return res.status(200).json({
         api_name: API_NAME,
+        business_name: BUSINESS_NAME,
         owner: OWNER,
         ...parsed,
       });
@@ -157,6 +151,7 @@ app.all('/api', async (req, res) => {
     return res.status(200).json({
       status: true,
       api_name: API_NAME,
+      business_name: BUSINESS_NAME,
       owner: OWNER,
       raw_response: rawText,
     });
@@ -164,6 +159,7 @@ app.all('/api', async (req, res) => {
     return res.status(200).json({
       status: false,
       api_name: API_NAME,
+      business_name: BUSINESS_NAME,
       owner: OWNER,
       error: 'Fetch Error: ' + (err && err.message ? err.message : String(err)),
     });
@@ -175,6 +171,7 @@ app.use((req, res) => {
   res.status(404).json({
     status: false,
     api_name: API_NAME,
+    business_name: BUSINESS_NAME,
     owner: OWNER,
     error: 'Not found',
   });
@@ -182,5 +179,5 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`${API_NAME} (Owner: ${OWNER}) running on port ${PORT}`);
+  console.log(`[${BUSINESS_NAME}] ${API_NAME} (Owner: ${OWNER}) running on port ${PORT}`);
 });
