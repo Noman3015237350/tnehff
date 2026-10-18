@@ -28,7 +28,8 @@ app.get('/', (req, res) => {
     message: 'Server is running successfully',
     endpoints: {
       info: '/api?info=1',
-      register: '/api?num=<phone>&msg=<name+business>',
+      // NEW ENDPOINT FORMAT
+      register: '/api?num=<phone>&name=<name>&business=<business_name>',
     },
   });
 });
@@ -39,7 +40,13 @@ app.all('/api', async (req, res) => {
   const body = req.body || {};
 
   const num = (q.num ?? body.num ?? '').toString().trim();
-  const msg = (q.msg ?? body.msg ?? '').toString().trim();
+  
+  // Support direct 'name' and 'business' variables
+  let namePart = (q.name ?? body.name ?? '').toString().trim();
+  let businessNamePart = (q.business ?? body.business ?? '').toString().trim();
+  
+  // Fallback to the old 'msg' splitting method if name/business are not provided
+  let msg = (q.msg ?? body.msg ?? '').toString().trim();
 
   // Info endpoint
   if (q.info || body.info) {
@@ -47,27 +54,52 @@ app.all('/api', async (req, res) => {
       status: true,
       api_name: API_NAME,
       owner: OWNER,
-      version: '1.0.0',
+      version: '1.1.0',
       endpoints: {
-        register: '/api?num=<phone>&msg=<name+business>',
+        register_new: '/api?num=<phone>&name=<name>&business=<business_name>',
+        register_old: '/api?num=<phone>&msg=<name+business>',
       },
     });
   }
 
-  if (!num || !msg) {
+  if (!num) {
     return res.status(200).json({
       status: false,
       api_name: API_NAME,
       owner: OWNER,
-      error: 'Missing parameters. Required: num, msg',
+      error: 'Missing parameter: num is required',
     });
   }
 
-  // Split msg into two halves (UTF-8 aware)
-  const chars = Array.from(msg);
-  const half = Math.ceil(chars.length / 2);
-  const namePart = chars.slice(0, half).join('');
-  const businessNamePart = chars.slice(half).join('');
+  // If name or business is missing, use the old splitting logic from 'msg'
+  if ((!namePart || !businessNamePart) && msg) {
+    if (msg.length < 6) msg = msg.padEnd(6, ' ');
+    const chars = Array.from(msg);
+    const half = Math.ceil(chars.length / 2);
+    namePart = namePart || chars.slice(0, half).join('').trim();
+    businessNamePart = businessNamePart || chars.slice(half).join('').trim();
+  }
+
+  // Validate required fields
+  if (!namePart || !businessNamePart) {
+    return res.status(200).json({
+      status: false,
+      api_name: API_NAME,
+      owner: OWNER,
+      error: 'Missing parameters. Provide either (num + msg) OR (num + name + business)',
+    });
+  }
+
+  // Force both parts to be between 3 and 50 characters
+  const padAndSlice = (str) => {
+    let s = str.trim();
+    if (s.length < 3) s = s.padEnd(3, 'x');
+    if (s.length > 50) s = s.substring(0, 50).trim();
+    return s;
+  };
+
+  namePart = padAndSlice(namePart);
+  businessNamePart = padAndSlice(businessNamePart);
 
   const payload = {
     name: namePart,
