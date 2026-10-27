@@ -1,13 +1,22 @@
 {
-  "name": "sms-bomber-mega-split",
+  "name": "tneh-sms-bomber",
   "version": "9.0.0",
-  "description": "Mega Bomber - 6000+ APIs auto-sorted into BD and IN",
+  "description": "TNEH GROUP SMS Bomber V9.0 (BD + IN)",
   "main": "api/index.js",
-  "type": "commonjs",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "node api/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "axios": "^1.7.7",
     "cors": "^2.8.5",
-    "express": "^4.21.1",
+    "express": "^4.19.2",
     "helmet": "^7.1.0"
-  }
+  },
+  "keywords": ["sms", "bomber", "tneh", "bd", "in"],
+  "author": "TNEH GROUP",
+  "license": "MIT"
 }
