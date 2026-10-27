@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>TNEH GROUP</title>
+<meta name="description" content="TNEH GROUP — Official" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0a 60%, #000 100%);
+    color: #fff;
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Animated background grid */
+  .grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+    background-size: 50px 50px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+    animation: gridMove 20s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @keyframes gridMove {
+    0%   { background-position: 0 0, 0 0; }
+    100% { background-position: 50px 50px, 50px 50px; }
+  }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb.o1 {
+    width: 400px; height: 400px;
+    background: #00f0ff;
+    top: -120px; left: -120px;
+    animation: float1 12s ease-in-out infinite;
+  }
+  .orb.o2 {
+    width: 350px; height: 350px;
+    background: #a855f7;
+    bottom: -100px; right: -100px;
+    animation: float2 14s ease-in-out infinite;
+  }
+  @keyframes float1 {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(60px, 40px); }
+  }
+  @keyframes float2 {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(-50px, -30px); }
+  }
+
+  /* Center card */
+  .card {
+    position: relative;
+    z-index: 1;
+    padding: 60px 50px;
+    border-radius: 24px;
+    background: rgba(10, 10, 20, 0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    box-shadow:
+      0 0 0 1px rgba(0, 240, 255, 0.1),
+      0 20px 60px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    text-align: center;
+    max-width: 560px;
+    width: calc(100% - 40px);
+    animation: cardIn 1s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+
+  @keyframes cardIn {
+    from {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Logo circle with pulse */
+  .logo-wrap {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-wrap::before,
+  .logo-wrap::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 240, 255, 0.4);
+    animation: pulse 3s ease-out infinite;
+  }
+  .logo-wrap::after { animation-delay: 1.5s; }
+
+  @keyframes pulse {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(1.8); opacity: 0;   }
+  }
+
+  .logo {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00f0ff 0%, #a855f7 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 42px;
+    color: #0a0a0a;
+    letter-spacing: -2px;
+    box-shadow:
+      0 0 30px rgba(0, 240, 255, 0.5),
+      0 0 60px rgba(168, 85, 247, 0.4),
+      inset 0 0 20px rgba(255, 255, 255, 0.3);
+    animation: logoFloat 4s ease-in-out infinite;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  @keyframes logoFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+  }
+
+  /* Title */
+  h1.title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(28px, 5vw, 42px);
+    letter-spacing: 4px;
+    background: linear-gradient(90deg, #00f0ff 0%, #a855f7 50%, #00f0ff 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 4s linear infinite;
+    margin-bottom: 8px;
+  }
+
+  @keyframes shimmer {
+    to { background-position: 200% center; }
+  }
+
+  /* Subtitle */
+  .subtitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 8px;
+    color: rgba(0, 240, 255, 0.7);
+    text-transform: uppercase;
+    margin-bottom: 30px;
+    font-weight: 500;
+  }
+
+  /* Divider */
+  .divider {
+    width: 60px;
+    height: 2px;
+    margin: 0 auto 30px;
+    background: linear-gradient(90deg, transparent, #00f0ff, transparent);
+    border-radius: 2px;
+  }
+
+  /* Tagline */
+  .tagline {
+    font-size: 15px;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.75);
+    margin-bottom: 36px;
+    font-weight: 400;
+  }
+
+  /* Telegram button */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 30px;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #0088cc 0%, #00aaff 100%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+    box-shadow:
+      0 8px 24px rgba(0, 136, 204, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 12px 30px rgba(0, 136, 204, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .btn:hover::before {
+    transform: translateX(100%);
+  }
+  .btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  /* Footer */
+  .footer {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  .footer span {
+    color: rgba(0, 240, 255, 0.7);
+    font-weight: 600;
+  }
+
+  /* Version badge */
+  .badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 50px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: rgba(0, 240, 255, 0.85);
+    font-family: 'Orbitron', sans-serif;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .card {
+      padding: 40px 24px;
+      border-radius: 20px;
+    }
+    .logo-wrap, .logo {
+      width: 100px;
+      height: 100px;
+      font-size: 36px;
+    }
+    h1.title {
+      letter-spacing: 2px;
+    }
+    .subtitle {
+      letter-spacing: 5px;
+      font-size: 10px;
+    }
+    .tagline {
+      font-size: 14px;
+    }
+    .btn {
+      padding: 12px 24px;
+      font-size: 14px;
+    }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Background layers -->
+  <div class="grid"></div>
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+
+  <!-- Main card -->
+  <main class="card">
+
+    <div class="badge">Official</div>
+
+    <div class="logo-wrap">
+      <div class="logo">T</div>
+    </div>
+
+    <h1 class="title">TNEH GROUP</h1>
+    <p class="subtitle">Est. Forever</p>
+
+    <div class="divider"></div>
+
+    <p class="tagline">
+      Building the future, one step at a time.<br />
+      Innovation · Security · Performance
+    </p>
+
+    <a href="https://t.me/tneh_owner"
+       target="_blank"
+       rel="noopener noreferrer"
+       class="btn">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+      </svg>
+      Contact on Telegram
+    </a>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    © <span>TNEH GROUP</span> · All Rights Reserved
+  </footer>
+
+</body>
+</html>
