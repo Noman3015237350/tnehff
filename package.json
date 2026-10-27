@@ -1,18 +1,13 @@
 {
-  "name": "tneh-custom-sms-bd",
-  "version": "1.0.0",
-  "private": true,
-  "description": "TNEH CUSTOM SMS BD — Business: TNEH ETHICAL HACKING GROUP — Owner: TNEH OWNER",
-  "author": "TNEH OWNER",
-  "license": "MIT",
-  "main": "server.js",
-  "engines": {
-    "node": ">=18"
-  },
-  "scripts": {
-    "start": "node server.js"
-  },
+  "name": "sms-bomber-mega-split",
+  "version": "9.0.0",
+  "description": "Mega Bomber - 6000+ APIs auto-sorted into BD and IN",
+  "main": "api/index.js",
+  "type": "commonjs",
   "dependencies": {
-    "express": "^4.19.2"
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "helmet": "^7.1.0"
   }
 }
